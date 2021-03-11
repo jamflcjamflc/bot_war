@@ -4,18 +4,21 @@
 # Alfredo Martin 2021
 
 version = 'player.v.1.0.0'
+
 import pygame
 import numpy as np
 
 
 class Player:
 
-    def __init__(self, pos, sprite_sheet, name, index):
+    def __init__(self, pos, sprite_sheet, name, index, horizon):
         """intiallizes the player class
-        pos: nupy array of size 2 containing the initial position of the player
+        pos: numpy array of size 2 containing the initial position of the player
         sprite_sheet: filename of the sprite sheet corresponding to this player
         name: str: name of the player
-        index: int: index corresponding to this player"""
+        index: int: index corresponding to this player
+        horizon: """
+        self.horizon = horizon
         self.name = name
         self.index = index
         self.size = (25, 50)
@@ -36,8 +39,8 @@ class Player:
         self.velocity = np.array(self.orientation) * self.speed  # vector veocity
         self.shot = False
         self.pos = np.array(pos)  # vector position
-        self.center = np.array([[self.pos - np.array([0, self.radius])],
-                               [self.pos - np.array([0, self.radius])]])
+        self.center = np.array([[self.pos + np.array([self.radius, self.radius])],
+                               [self.pos + np.array([self.radius, 3 * self.radius])]])
         self.active = True  # whether the player has any life left
         self.lives = 3  # remaining lives
         self.t = 0  # time ??
@@ -51,16 +54,17 @@ class Player:
 
     def get_center(self):
         """gets a new collision center based on the new pos"""
-        self.center = np.array([[self.pos - np.array([0, self.radius])],
-                               [self.pos - np.array([0, self.radius])]])
+        self.center = np.array([[self.pos + np.array([self.radius, self.radius])],
+                               [self.pos + np.array([self.radius, 3 * self.radius])]])
 
     def inside_screen(self, res):
         """returns movement options
-        res: tuple of two ints containing the screen resolution
+        screen: pygame canvas instance
         returns: tuple of four bools"""
+        _, _, w, h = screen.get_rect()
         result = list()
-        result.append(self.pos[0] + self.size[0] / 2 < res[0])
-        result.append(self.pos[1] + self.size[1] / 2 < res[1])
+        result.append(self.pos[0] + self.size[0] / 2 < w)
+        result.append(self.pos[1] + self.size[1] / 2 < h)
         result.append(self.pos[0] - self.size[0] / 2 < 0)
         result.append(self.pos[1] - self.size[1] / 2 < 0)
         return result
@@ -109,11 +113,21 @@ class Player:
         self.velocity = np.array(self.orientation) * self.speed
         return False
 
+    def screen_pos(self, screen):
+        """screen: pygame canvas instance"""
+        _, _, w, h = screen.get_rect()
+        xm = w / 2
+        dx = xm - self.pos[0]
+        per_dy = self.pos[1] / (h - self.horizon)
+        dx_screen = dx * (0.9 + per_dy * 0.1)
+        x_screen = xm - dx_screen
+        y_screen = self.pos[1] + self.horizon
+        return np.array([x_screen, y_screen])
+
     def draw(self, screen):
         """blits the player into the screen
         screen: instance of pygame.surface object"""
-
-        screen.blit(self.sprite_sheet, self.pos,
+        screen.blit(self.sprite_sheet, self.screen_pos(screen),
                     area=(self.step * self.size[0], self.line * self.size[1],
                           (self.step + 1) * self.size[0], (self.line + 1) * self.size[1]))
         return
