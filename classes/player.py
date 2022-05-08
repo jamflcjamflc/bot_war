@@ -7,18 +7,21 @@ version = 'player.v.1.0.0'
 
 import pygame
 import numpy as np
+from classes.utils import screen_pos
 
+pygame.joystick.init()
 
 class Player:
 
-    def __init__(self, pos, sprite_sheet, name, index, horizon):
+    def __init__(self, pos, sprite_sheet, name, index, joystick):
         """intiallizes the player class
         pos: numpy array of size 2 containing the initial position of the player
         sprite_sheet: filename of the sprite sheet corresponding to this player
         name: str: name of the player
         index: int: index corresponding to this player
+        joystick: instance of Joystick pygame class
         horizon: """
-        self.horizon = horizon
+        self.joystick = joystick
         self.name = name
         self.index = index
         self.size = (25, 50)
@@ -26,11 +29,12 @@ class Player:
         self.sprite_sheet = pygame.image.load(sprite_sheet)
         # add transparent pixels to the sprite sheet
         _, _, w, h = self.sprite_sheet.get_rect()
+        self.sprite_sheet = self.sprite_sheet.convert_alpha()
         for i in range(w):
             for j in range(h):
-                if self.sprite_sheet.get_at((i, j)) == (255, 255, 255):
+                if self.sprite_sheet.get_at((i, j)) == (255, 255, 255, 255):
                     self.sprite_sheet.set_at((i, j), (255, 255, 255, 0))
-        self.orientations = {(0, 1): 0, (1, 0): 1, (0, -1): 2, (-1, 0): 3}  # dict with sprite lines
+        self.orientations = {(0, -1): 0, (1, 0): 1, (0, 1): 2, (-1, 0): 3}  # dict with sprite lines
         self.orientation = (0, 1)  # orientation
         self.step = 1  # sprite to be render for the current orientation
         self.line = self.orientations[self.orientation]  # line indicating the orientation
@@ -38,12 +42,13 @@ class Player:
         self.max_speed = 3.
         self.velocity = np.array(self.orientation) * self.speed  # vector veocity
         self.shot = False
-        self.pos = np.array(pos)  # vector position
+        self.pos = np.array(pos).astype('float64')  # vector position
         self.center = np.array([[self.pos + np.array([self.radius, self.radius])],
                                [self.pos + np.array([self.radius, 3 * self.radius])]])
         self.active = True  # whether the player has any life left
         self.lives = 3  # remaining lives
         self.t = 0  # time ??
+        self.mask = np.array([1., -1.])  # modifier for the joystic hat
 
     def get_next_step(self):
         """gets the next step"""
@@ -61,12 +66,12 @@ class Player:
         """returns movement options
         screen: pygame canvas instance
         returns: tuple of four bools"""
-        _, _, w, h = screen.get_rect()
+        w, h = res
         result = list()
-        result.append(self.pos[0] + self.size[0] / 2 < w)
-        result.append(self.pos[1] + self.size[1] / 2 < h)
-        result.append(self.pos[0] - self.size[0] / 2 < 0)
-        result.append(self.pos[1] - self.size[1] / 2 < 0)
+        result.append(self.pos[1] + self.size[1] <= h)
+        result.append(self.pos[0] + self.size[0] <= w)
+        result.append(self.pos[1] >= 0)
+        result.append(self.pos[0] >= 0)
         return result
 
     def get_collision(self, objects):
@@ -82,55 +87,53 @@ class Player:
                 return True
         return False
 
-    def move(self, joystick, screen):
+    def move(self, res):
         """moves the player in the direction indicated by the joystick
-         joystick: instance of Joystick pygame class
-         screen: instance of screen canvas
+         res: tuple with the resolution of the screen
          returns: bool: whether a shot has been done"""
-        command = joystick.get_hat(0)
-        shot = not self.shot and joystick.get_button(1)
-        _, _, w, h = screen.get_rect()
+        command = self.joystick.get_hat(0)
+        self.shot = not self.shot and self.joystick.get_button(1)
         if self.shot:
             self.step = 0
-            self.speed = 0
+            self.speed = 0.
             self.velocity = np.array(self.orientation) * self.speed
             return True
         if command != (0, 0) and 0 in command:
             self.orientation = command
             self.speed = self.max_speed
-            self.velocity = np.array(self.orientation) * self.speed
+            self.velocity = self.mask * np.array(self.orientation).astype('float64') * self.speed
             self.line = self.orientations[self.orientation]
             self.get_next_step()  # gets the next step
-            if all(self.inside_screen((w, h))):  # move only we are within boundaries
+            if self.inside_screen(res)[self.line]:
+                self.pos += self.velocity
+                self.get_center()
+            if all(self.inside_screen(res)):  # move only we are within boundaries
                 self.pos += self.velocity
                 self.get_center()
             return False
-        # No command has been added, so position does not chanve
+        # No command has been added, so position does not change
         self.orientation = (1, 0)
         self.step = 1
         self.line = 0
         self.speed = 0.
-        self.velocity = np.array(self.orientation) * self.speed
+        self.velocity = np.array(self.orientation).astype('float64') * self.speed
         return False
 
     def screen_pos(self, screen):
         """screen: pygame canvas instance"""
         _, _, w, h = screen.get_rect()
-        xm = w / 2
-        dx = xm - self.pos[0]
-        per_dy = self.pos[1] / (h - self.horizon)
-        dx_screen = dx * (0.9 + per_dy * 0.1)
-        x_screen = xm - dx_screen
-        y_screen = self.pos[1] + self.horizon
+        ho = wo = h // 7
+        x_screen, y_screen = screen_pos((w, h), self.pos, ho, wo)
         return np.array([x_screen, y_screen])
 
     def draw(self, screen):
         """blits the player into the screen
-        screen: instance of pygame.surface object"""
+        screen: instance of pygame.surface object
+        returns: screen"""
         screen.blit(self.sprite_sheet, self.screen_pos(screen),
                     area=(self.step * self.size[0], self.line * self.size[1],
-                          (self.step + 1) * self.size[0], (self.line + 1) * self.size[1]))
-        return
+                          self.size[0], self.size[1]))
+        return screen
 
 
 if __name__ == '__main__':
