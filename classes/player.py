@@ -8,12 +8,13 @@ version = 'player.v.1.0.0'
 import pygame
 import numpy as np
 from classes.utils import screen_pos
+from classes.gun import Gun
 
 pygame.joystick.init()
 
 class Player:
 
-    def __init__(self, pos, sprite_sheet, name, index, joystick):
+    def __init__(self, pos, sprite_sheet, name, index, joystick, color):
         """intiallizes the player class
         pos: numpy array of size 2 containing the initial position of the player
         sprite_sheet: filename of the sprite sheet corresponding to this player
@@ -26,6 +27,9 @@ class Player:
         self.index = index
         self.size = (25, 50)
         self.radius = 12.5  # collision radius for this object
+        self.color = color
+        self.pos = np.array(pos).astype('float64')  # vector position
+        self.gun = Gun(self.pos.copy(), self.color)
         self.sprite_sheet = pygame.image.load(sprite_sheet)
         # add transparent pixels to the sprite sheet
         _, _, w, h = self.sprite_sheet.get_rect()
@@ -42,13 +46,22 @@ class Player:
         self.max_speed = 3.
         self.velocity = np.array(self.orientation) * self.speed  # vector veocity
         self.shot = False
-        self.pos = np.array(pos).astype('float64')  # vector position
         self.center = np.array([[self.pos + np.array([self.radius, self.radius])],
                                [self.pos + np.array([self.radius, 3 * self.radius])]])
         self.active = True  # whether the player has any life left
         self.lives = 3  # remaining lives
         self.t = 0  # time ??
         self.mask = np.array([1., -1.])  # modifier for the joystic hat
+
+    def shoot(self):
+        """shoots a bullet"""
+        self.gun.t += 1  # this increases the t in gun to be able to shot
+        if self.joystick.get_button(1):
+            self.gun.pos = self.pos + np.array([25., 50.]) / 2
+            self.gun.shoot(7 * np.array(self.orientation).astype('float64'))
+
+        #print(self.color, len([bullet for bullet in self.gun.cartridge if bullet.active]))
+
 
     def get_next_step(self):
         """gets the next step"""
@@ -99,10 +112,12 @@ class Player:
             self.velocity = np.array(self.orientation) * self.speed
             return True
         if command != (0, 0) and 0 in command:
-            self.orientation = command
+            self.orientation = self.mask * np.array(command).astype('float64')
             self.speed = self.max_speed
-            self.velocity = self.mask * np.array(self.orientation).astype('float64') * self.speed
-            self.line = self.orientations[self.orientation]
+            self.velocity = np.array(self.orientation).astype('float64') * self.speed
+            #self.velocity = self.mask * np.array(self.orientation).astype('float64') * self.speed
+            #self.line = self.orientations[self.orientation]
+            self.line = self.orientations[command]
             self.get_next_step()  # gets the next step
             if self.inside_screen(res)[self.line]:
                 self.pos += self.velocity
@@ -111,13 +126,14 @@ class Player:
                 self.pos += self.velocity
                 self.get_center()
             return False
+        else:
         # No command has been added, so position does not change
-        self.orientation = (1, 0)
-        self.step = 1
-        self.line = 0
-        self.speed = 0.
-        self.velocity = np.array(self.orientation).astype('float64') * self.speed
-        return False
+            #self.orientation = (1, 0)
+            self.step = 1
+            #self.line = 0
+            self.speed = 0.
+            self.velocity = np.array(self.orientation).astype('float64') * self.speed
+            return False
 
     def screen_pos(self, screen):
         """screen: pygame canvas instance"""
@@ -130,9 +146,15 @@ class Player:
         """blits the player into the screen
         screen: instance of pygame.surface object
         returns: screen"""
+        #The next line draws the player into the screen
         screen.blit(self.sprite_sheet, self.screen_pos(screen),
                     area=(self.step * self.size[0], self.line * self.size[1],
                           self.size[0], self.size[1]))
+        #The next loop moves the bullets and draws them into the screen
+        for i, bullet in enumerate(self.gun.cartridge):
+            self.gun.cartridge[i].update_pos(screen)
+        # The next line eliminates alll the bullets that are destroyed
+        self.gun.cartridge = [bullet for bullet in self.gun.cartridge if bullet.alive]
         return screen
 
 

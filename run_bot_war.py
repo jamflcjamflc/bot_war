@@ -37,8 +37,10 @@ if __name__ == '__main__':
         print("You can't play without joysticks")
         sys.exit(1)
     sprites = [os.path.join(folder, 'sprites', 'player' + str(i+1) + '.png') for i in range(njoys)]
-    players = [Player(pos[i], sprites[i], 'player ' + str(i+1), i, joysticks[i]) for i in range(njoys)]
-    battle = Battle(screen, players)
+    bot_sprite = os.path.join(folder, 'sprites', 'bots.png')
+    colors = [(255, 0, 0), (0, 0, 255)]
+    players = [Player(pos[i], sprites[i], 'player ' + str(i+1), i, joysticks[i], colors[i]) for i in range(njoys)]
+    battle = Battle(screen, players, bot_sprite)
     game_exit = battle.run_battle()
     if game_exit:
         pygame.quit()

@@ -7,9 +7,39 @@ version = 'gun.v.1.0.0'
 
 import numpy as np
 import pygame
+from classes.bullet import Bullet
 
 
 class Gun:
+
+    def __init__(self, pos, color, nbullets=100, cadence=5):
+        """initiallizes the instance for a given position and gun type
+        pos: numpy array of shape (2,)
+        color: tuple
+        nbullets: int"""
+        self.pos = pos
+        self.t = 0  # how many frames ago the gun has shot
+        self.color = color
+        self.cadence = cadence
+        self.cartridge = [Bullet(color=self.color) for _ in range(nbullets)]
+        print(len(self.cartridge))
+
+    def shoot(self, velocity):
+        """Shoots a bullet if the cartridge is not empty
+        velocity: np.array of shape (2,)"""
+        if self.t > self.cadence:
+            self.t = 0
+            for i, bullet in enumerate(self.cartridge):
+                print(i)
+                if not self.cartridge[i].active:
+                    self.cartridge[i].active = True
+                    self.cartridge[i].pos = self.pos
+                    self.cartridge[i].velocity = velocity
+                    print(len(self.cartridge), len([bullet for bullet in self.cartridge if bullet.active]))
+                    print(self.cartridge[i].pos, bullet.alive)
+                    break
+
+class OldGun:
 
     def __init__(self, pos, sprite_sheet, g_type, horizon):
         """initiallizes the instance for a given position and gun type
